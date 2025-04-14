@@ -1,7 +1,7 @@
 import React from 'react';
 import {
   Dialog, DialogActions, DialogContent, DialogTitle, Button, withStyles, Paper,
-  LinearProgress, Select, MenuItem, InputLabel, FormControl
+  LinearProgress, Select, MenuItem, InputLabel, FormControl, TextField
 } from '@material-ui/core';
 import ClassNames from 'classnames';
 import { procRenderSep, procRenderUnity, procRenderUE4 } from '../../three/render/renderProc';
@@ -58,6 +58,7 @@ class SaveDialog extends React.Component {
     saveDisable: false,
     resolution: 256,
     format: 'png',
+    filePrefix: 'CubeMap',
   }
 
 
@@ -68,11 +69,13 @@ class SaveDialog extends React.Component {
     // const myButton = document.getElementById('SaveButton')
     this.setState(() => ({ saveDisable: true }))
 
+    const prefix = this.state.filePrefix || 'CubeMap';
+    
     if (this.state.format === 'hdr') {
       this.hdrProccess(href => {
         this.setState(() => ({
           url: href,
-          download: 'Standard-Cube-Map.zip',
+          download: `${prefix}.zip`,
           processed: true,
           saveDisable: false
         }))
@@ -81,7 +84,7 @@ class SaveDialog extends React.Component {
       this.regularProccess(href => {
         this.setState(() => ({
           url: href,
-          download: 'Standard-Cube-Map.zip',
+          download: `${prefix}.zip`,
           processed: true,
           saveDisable: false
         }))
@@ -90,13 +93,15 @@ class SaveDialog extends React.Component {
 
   }
   hdrProccess = (callback) => {
+    const prefix = this.state.filePrefix || 'CubeMap';
+    
     if (this.state.selected === 1) {
       hdrProcRenderUnity(this.state.resolution, href => {
         callback(href);
       }, progress => {
         const { progNow, progTotal } = progress
         this.setState(() => ({ progress: progNow / progTotal * 100 }))
-      })
+      }, prefix)
     }
     if (this.state.selected === 2) {
       hdrProcRenderUE4(this.state.resolution, href => {
@@ -104,7 +109,7 @@ class SaveDialog extends React.Component {
       }, progress => {
         const { progNow, progTotal } = progress
         this.setState(() => ({ progress: progNow / progTotal * 100 }))
-      })
+      }, prefix)
     }
     if (this.state.selected === 3) {
       hdrProcRenderSep(this.state.resolution, href => {
@@ -112,17 +117,19 @@ class SaveDialog extends React.Component {
       }, progress => {
         const { progNow, progTotal } = progress
         this.setState(() => ({ progress: progNow / progTotal * 100 }))
-      })
+      }, prefix)
     }
   }
   regularProccess = (callback) => {
+    const prefix = this.state.filePrefix || 'CubeMap';
+    
     if (this.state.selected === 1) {
       procRenderUnity(this.state.resolution, href => {
         callback(href);
       }, progress => {
         const { progNow, progTotal } = progress
         this.setState(() => ({ progress: progNow / progTotal * 100 }))
-      })
+      }, prefix)
     }
     if (this.state.selected === 2) {
       procRenderUE4(this.state.resolution, href => {
@@ -130,7 +137,7 @@ class SaveDialog extends React.Component {
       }, progress => {
         const { progNow, progTotal } = progress
         this.setState(() => ({ progress: progNow / progTotal * 100 }))
-      })
+      }, prefix)
     }
     if (this.state.selected === 3) {
       procRenderSep(this.state.resolution, href => {
@@ -138,7 +145,7 @@ class SaveDialog extends React.Component {
       }, progress => {
         const { progNow, progTotal } = progress
         this.setState(() => ({ progress: progNow / progTotal * 100 }))
-      })
+      }, prefix)
     }
   }
   saveFiles = () => {
@@ -163,6 +170,9 @@ class SaveDialog extends React.Component {
       progress: 0
     }))
   }
+  handlePrefixChange = (event) => {
+    this.setState({ filePrefix: event.target.value });
+  }
   render() {
     const { classes } = this.props;
     const { selected } = this.state;
@@ -172,10 +182,10 @@ class SaveDialog extends React.Component {
         onClose={this.onClose}
       >
         <DialogTitle>
-          Chose Your Layout
+          设置保存选项
         </DialogTitle>
         <DialogContent style={{ height: 450 }}>
-          <div style={{ display: 'flex' }}>
+          <div style={{ display: 'flex', flexWrap: 'wrap', marginBottom: '16px' }}>
             <ResolutionSelect
               classes={classes}
               onChange={this.onSelectChange('resolution')}
@@ -186,6 +196,16 @@ class SaveDialog extends React.Component {
               onChange={this.onSelectChange('format')}
               value={this.state.format}
             />
+            <FormControl className={classes.formControl}>
+              <TextField
+                label="文件前缀"
+                value={this.state.filePrefix}
+                onChange={this.handlePrefixChange}
+                margin="normal"
+                placeholder="输入文件前缀"
+                helperText="将用于命名导出的文件"
+              />
+            </FormControl>
           </div>
           <CrossLayout classes={classes} selected={selected} onClick={this.handleSelect(1)} />
           <LineLayout classes={classes} selected={selected} onClick={this.handleSelect(2)} />
@@ -205,16 +225,15 @@ class SaveDialog extends React.Component {
               disabled={selected === 0 || this.state.saveDisable}
               onClick={this.saveFiles}
             >
-              Save
+              保存
             </Button>
             :
             <Button
               variant='contained'
-              disabled={selected === 0}
+              disabled={selected === 0 || this.state.saveDisable}
               onClick={this.proccessFiles()}
-              disabled={this.state.saveDisable}
             >
-              Process
+              处理
             </Button>
           }
         </DialogActions>

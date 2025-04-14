@@ -4,9 +4,9 @@
   "description": "",
   "main": "index.js",
   "scripts": {
-    "build-dev": "webpack --mode=development",
-    "build": "webpack --mode=production",
-    "start": "webpack-dev-server --mode=development"
+    "build-dev": "set NODE_OPTIONS=--openssl-legacy-provider && webpack --mode=development",
+    "build": "set NODE_OPTIONS=--openssl-legacy-provider && webpack --mode=production",
+    "start": "set NODE_OPTIONS=--openssl-legacy-provider && webpack-dev-server --mode=development"
   },
   "author": "Mateusz Wiśniowski",
   "license": "MIT",
@@ -29,5 +29,8 @@
     "webpack": "^4.16.1",
     "webpack-cli": "^3.1.0",
     "webpack-dev-server": "^3.1.5"
+  },
+  "dependencies": {
+    "hdri-to-cubemap": "file:"
   }
 }
