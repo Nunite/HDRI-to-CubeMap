@@ -6,7 +6,8 @@
   "scripts": {
     "build-dev": "set NODE_OPTIONS=--openssl-legacy-provider && webpack --mode=development",
     "build": "set NODE_OPTIONS=--openssl-legacy-provider && webpack --mode=production",
-    "start": "set NODE_OPTIONS=--openssl-legacy-provider && webpack-dev-server --mode=development"
+    "start": "set NODE_OPTIONS=--openssl-legacy-provider && webpack-dev-server --mode=development",
+    "deploy": "set NODE_OPTIONS=--openssl-legacy-provider && webpack --mode=production && gh-pages -d public"
   },
   "author": "Mateusz Wiśniowski",
   "license": "MIT",
@@ -21,6 +22,7 @@
     "babel-preset-react": "^6.24.1",
     "babel-preset-stage-2": "^6.24.1",
     "classnames": "^2.2.6",
+    "gh-pages": "^6.3.0",
     "raw-loader": "^0.5.1",
     "react": "^16.4.1",
     "react-dom": "^16.4.1",
