@@ -76,7 +76,71 @@ const storeBlobsSep = (name, callback = href => { }, progress = prog => { }) => 
     }
   })
 }
-const hdrProcRenderSep = (size = 64, callback = (href) => { }, progress = prog => { }) => {
+
+// 添加一个旋转HDR图像数据的函数
+const rotateHdrBuffer = (width, height, buffer, direction) => {
+  // 创建新的缓冲区
+  const newBuffer = new Uint8Array(width * height * 4);
+  
+  // 对每个像素进行旋转
+  for (let y = 0; y < height; y++) {
+    for (let x = 0; x < width; x++) {
+      let newX, newY;
+      
+      // 计算旋转后的坐标
+      if (direction === 'left') { // 逆时针旋转90度
+        newX = height - 1 - y;
+        newY = x;
+      } else if (direction === 'right') { // 顺时针旋转90度
+        newX = y;
+        newY = width - 1 - x;
+      } else {
+        newX = x;
+        newY = y;
+      }
+      
+      // 复制像素数据
+      const srcIdx = (y * width + x) * 4;
+      const destIdx = (newY * width + newX) * 4;
+      
+      newBuffer[destIdx] = buffer[srcIdx];       // R
+      newBuffer[destIdx + 1] = buffer[srcIdx + 1]; // G
+      newBuffer[destIdx + 2] = buffer[srcIdx + 2]; // B
+      newBuffer[destIdx + 3] = buffer[srcIdx + 3]; // A/E
+    }
+  }
+  
+  return newBuffer;
+}
+
+// 添加一个专门处理旋转HDR图像的storeBlobsSep变种
+const storeRotatedHdrBlobsSep = (name, direction, callback = href => { }, progress = prog => { }) => {
+  const width = hdrRenderTarget.width;
+  const height = hdrRenderTarget.height;
+  const rgbeBuffer = new Uint8Array(width * height * 4);
+  hdrProcRenderer.readRenderTargetPixels(hdrRenderTarget, 0, 0, width, height, rgbeBuffer);
+  
+  // 如果需要旋转，对buffer进行旋转处理
+  let processedBuffer = rgbeBuffer;
+  if (direction) {
+    processedBuffer = rotateHdrBuffer(width, height, rgbeBuffer, direction);
+  }
+  
+  console.log('PixelDataTest', processedBuffer);
+  hdrConverterEmmisive(width, height, processedBuffer).then(blob => {
+    renderCatch.blobs.push(blob);
+    renderCatch.names.push(`${name}.hdr`);
+    renderCatch.progNow++;
+    const { progNow, progTotal } = renderCatch;
+    progress({ progNow, progTotal });
+    console.log('blob', blob);
+    if (renderCatch.blobs.length === 6) {
+      packBlobsSep(callback, progress);
+    }
+  });
+}
+
+const hdrProcRenderSep = (size = 64, callback = (href) => { }, progress = prog => { }, prefix = 'CubeMap') => {
   renderCatch.blobs = [];
   renderCatch.names = [];
   renderCatch.progNow = 0;
@@ -88,47 +152,48 @@ const hdrProcRenderSep = (size = 64, callback = (href) => { }, progress = prog =
   const angle = calcAngle();
   procCamera.rotateY(angle);
 
+  // 使用前缀命名文件
+  const baseName = prefix || 'CubeMap';
+
   //+x
   updateMaterial();
   procCamera.rotateY(-Math.PI / 2);
   hdrProcRenderer.render(hdrScene, procCamera);
   hdrProcRenderer.render(hdrScene, procCamera, hdrRenderTarget);
-  storeBlobsSep('px', callback, progress);
+  storeBlobsSep(`${baseName}_px`, callback, progress);
   //-x
   updateMaterial();
   procCamera.rotateY(Math.PI);
   hdrProcRenderer.render(hdrScene, procCamera);
   hdrProcRenderer.render(hdrScene, procCamera, hdrRenderTarget);
-  storeBlobsSep('nx', callback, progress);
+  storeBlobsSep(`${baseName}_nx`, callback, progress);
   //+y
   updateMaterial();
   procCamera.rotateY(-Math.PI / 2);
   procCamera.rotateX(Math.PI / 2);
   hdrProcRenderer.render(hdrScene, procCamera);
   hdrProcRenderer.render(hdrScene, procCamera, hdrRenderTarget);
-  storeBlobsSep('py', callback, progress);
+  storeBlobsSep(`${baseName}_py`, callback, progress);
   //-y
   updateMaterial();
   procCamera.rotateX(-Math.PI);
   hdrProcRenderer.render(hdrScene, procCamera);
   hdrProcRenderer.render(hdrScene, procCamera, hdrRenderTarget);
-  storeBlobsSep('ny', callback, progress);
+  storeBlobsSep(`${baseName}_ny`, callback, progress);
   //+z
   updateMaterial();
   procCamera.rotateX(Math.PI / 2);
   hdrProcRenderer.render(hdrScene, procCamera);
   hdrProcRenderer.render(hdrScene, procCamera, hdrRenderTarget);
-  storeBlobsSep('pz', callback, progress);
+  storeBlobsSep(`${baseName}_pz`, callback, progress);
   //-z
   updateMaterial();
   procCamera.rotateY(Math.PI);
   hdrProcRenderer.render(hdrScene, procCamera);
   hdrProcRenderer.render(hdrScene, procCamera, hdrRenderTarget);
-  storeBlobsSep('nz', callback, progress);
-
-  // packBlobs(callback);
+  storeBlobsSep(`${baseName}_nz`, callback, progress);
 }
-const hdrProcRenderUnity = (size = 64, callback = href => { }, progress = prog => { }) => {
+const hdrProcRenderUnity = (size = 64, callback = href => { }, progress = prog => { }, prefix = 'CubeMap') => {
   renderCatch.progNow = 0;
   renderCatch.progTotal = 4;
   const { canvas } = renderCatch;
@@ -178,13 +243,16 @@ const hdrProcRenderUnity = (size = 64, callback = href => { }, progress = prog =
 
   const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
 
+  // 使用前缀命名文件
+  const fileName = `${prefix || 'CubeMap'}.hdr`;
+
   hdrConverterEmmisive(canvas.width, canvas.height, imageData.data, false).then(blob => {
     console.log('blob created')
     renderCatch.progNow++
     progress({ progNow: renderCatch.progNow, progTotal: renderCatch.progTotal });
 
     zip.createWriter(new zip.BlobWriter(), writer => {
-      writer.add('StandardCubeMap.hdr', new zip.BlobReader(blob), () => {
+      writer.add(fileName, new zip.BlobReader(blob), () => {
         renderCatch.progNow++
         progress({ progNow: renderCatch.progNow, progTotal: renderCatch.progTotal });
 
@@ -199,7 +267,7 @@ const hdrProcRenderUnity = (size = 64, callback = href => { }, progress = prog =
     });
   })
 }
-const hdrProcRenderUE4 = (size = 64, callback = href => { }, progress = prog => { }) => {
+const hdrProcRenderUE4 = (size = 64, callback = href => { }, progress = prog => { }, prefix = 'CubeMap') => {
   renderCatch.progNow = 0;
   renderCatch.progTotal = 4;
   const { canvas } = renderCatch;
@@ -256,13 +324,17 @@ const hdrProcRenderUE4 = (size = 64, callback = href => { }, progress = prog => 
 
   const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
   console.log('zip start')
+
+  // 使用前缀命名文件
+  const fileName = `${prefix || 'CubeMap'}.hdr`;
+
   hdrConverterEmmisive(canvas.width, canvas.height, imageData.data, false).then(blob => {
     console.log('blob created')
     renderCatch.progNow++
     progress({ progNow: renderCatch.progNow, progTotal: renderCatch.progTotal });
 
     zip.createWriter(new zip.BlobWriter(), writer => {
-      writer.add('StandardCubeMap.hdr', new zip.BlobReader(blob), () => {
+      writer.add(fileName, new zip.BlobReader(blob), () => {
         renderCatch.progNow++
         progress({ progNow: renderCatch.progNow, progTotal: renderCatch.progTotal });
 
@@ -299,7 +371,102 @@ const hdrProcRenderUE4 = (size = 64, callback = href => { }, progress = prog => 
   //   });
   // });
 }
+const hdrProcRenderSourceCross = (size = 64, callback = href => { }, progress = prog => { }, prefix = 'CubeMap', isGoldSrc = false) => {
+  renderCatch.blobs = [];
+  renderCatch.names = [];
+  renderCatch.progNow = 0;
+  renderCatch.progTotal = 12;
+  hdrProcRenderer.setSize(size, size);
+  hdrRenderTarget.setSize(size, size);
+  procCamera.rotation.set(0, 0, 0);
+
+  const angle = calcAngle();
+  procCamera.rotateY(angle);
+
+  // 使用前缀命名
+  const baseName = prefix || 'CubeMap';
+  
+  // GoldSrc命名映射
+  const goldSrcMapping = {
+    'px': 'rt', 
+    'nx': 'lf', 
+    'py': 'up',  
+    'ny': 'dn',  
+    'pz': 'ft',  
+    'nz': 'bk'  
+  };
+  
+  const useGoldSrcNaming = isGoldSrc;
+  
+  // 渲染U (up) - +y
+  updateMaterial();
+  procCamera.rotation.set(Math.PI / 2, 0, 0);
+  hdrProcRenderer.render(hdrScene, procCamera);
+  hdrProcRenderer.render(hdrScene, procCamera, hdrRenderTarget);
+  // 对up图像向左旋转90度
+  if (useGoldSrcNaming) {
+    storeRotatedHdrBlobsSep(`${baseName}_${goldSrcMapping['py']}`, 'left', callback, progress);
+  } else {
+    storeRotatedHdrBlobsSep(`${baseName}_py`, 'left', callback, progress);
+  }
+  
+  // 渲染L (left) - -x
+  updateMaterial();
+  procCamera.rotation.set(0, -Math.PI / 2, 0);
+  hdrProcRenderer.render(hdrScene, procCamera);
+  hdrProcRenderer.render(hdrScene, procCamera, hdrRenderTarget);
+  if (useGoldSrcNaming) {
+    storeBlobsSep(`${baseName}_${goldSrcMapping['nx']}`, callback, progress);
+  } else {
+    storeBlobsSep(`${baseName}_nx`, callback, progress);
+  }
+  
+  // 渲染F (front) - +z - 调整为第三个渲染，符合GoldSrc布局
+  updateMaterial();
+  procCamera.rotation.set(0, 0, 0);
+  hdrProcRenderer.render(hdrScene, procCamera);
+  hdrProcRenderer.render(hdrScene, procCamera, hdrRenderTarget);
+  if (useGoldSrcNaming) {
+    storeBlobsSep(`${baseName}_${goldSrcMapping['pz']}`, callback, progress);
+  } else {
+    storeBlobsSep(`${baseName}_pz`, callback, progress);
+  }
+  
+  // 渲染R (right) - +x
+  updateMaterial();
+  procCamera.rotation.set(0, Math.PI / 2, 0);
+  hdrProcRenderer.render(hdrScene, procCamera);
+  hdrProcRenderer.render(hdrScene, procCamera, hdrRenderTarget);
+  if (useGoldSrcNaming) {
+    storeBlobsSep(`${baseName}_${goldSrcMapping['px']}`, callback, progress);
+  } else {
+    storeBlobsSep(`${baseName}_px`, callback, progress);
+  }
+  
+  // 渲染B (back) - -z - 调整为第五个渲染，符合GoldSrc布局
+  updateMaterial();
+  procCamera.rotation.set(0, Math.PI, 0);
+  hdrProcRenderer.render(hdrScene, procCamera);
+  hdrProcRenderer.render(hdrScene, procCamera, hdrRenderTarget);
+  if (useGoldSrcNaming) {
+    storeBlobsSep(`${baseName}_${goldSrcMapping['nz']}`, callback, progress);
+  } else {
+    storeBlobsSep(`${baseName}_nz`, callback, progress);
+  }
+  
+  // 渲染D (down) - -y
+  updateMaterial();
+  procCamera.rotation.set(-Math.PI / 2, 0, 0);
+  hdrProcRenderer.render(hdrScene, procCamera);
+  hdrProcRenderer.render(hdrScene, procCamera, hdrRenderTarget);
+  // 对down图像向右旋转90度
+  if (useGoldSrcNaming) {
+    storeRotatedHdrBlobsSep(`${baseName}_${goldSrcMapping['ny']}`, 'right', callback, progress);
+  } else {
+    storeRotatedHdrBlobsSep(`${baseName}_ny`, 'right', callback, progress);
+  }
+}
 
 
-export { hdrProcRenderSep, hdrProcRenderUnity, hdrProcRenderUE4 }
+export { hdrProcRenderSep, hdrProcRenderUnity, hdrProcRenderUE4, hdrProcRenderSourceCross }
 
